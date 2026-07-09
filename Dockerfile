@@ -1,20 +1,27 @@
-FROM php:8.4-cli
+FROM php:8.3-apache
 
 RUN apt-get update && apt-get install -y \
-    git unzip zip curl \
-    libpng-dev libonig-dev libxml2-dev \
-    && docker-php-ext-install pdo_mysql mbstring bcmath gd
+    git unzip zip libpq-dev libzip-dev \
+    && docker-php-ext-install pdo pdo_pgsql zip
 
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+RUN php -m | grep pgsql
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
 COPY . .
 
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+RUN composer install --no-dev --optimize-autoloader
 
-RUN chmod -R 777 storage bootstrap/cache
+RUN chown -R www-data:www-data storage bootstrap/cache
 
-EXPOSE 8080
+RUN php artisan config:clear
+RUN php artisan route:clear
+RUN php artisan view:clear
 
-CMD php artisan serve --host=0.0.0.0 --port=${PORT:-8080}
+RUN a2enmod rewrite
+
+COPY ./apache.conf /etc/apache2/sites-available/000-default.conf
+
+CMD php artisan migrate --force && apache2-foreground
