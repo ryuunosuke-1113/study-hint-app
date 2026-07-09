@@ -3,7 +3,7 @@
 @section('content')
     <h2>科目追加</h2>
 
-    <form action="{{ route('subjects.store') }}" method="POST">
+    <form action="{{ route('subjects.store', [], false) }}" method="POST">
         @csrf
 
         <label>科目名</label>
