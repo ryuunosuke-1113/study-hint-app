@@ -13,7 +13,7 @@
             <div style="margin-top:8px;">
                 <a href="{{ route('subjects.edit', $subject) }}">編集</a>
 
-                <form action="{{ route('subjects.destroy', $subject) }}" method="POST" style="display:inline;">
+                <form action="{{ route('subjects.destroy', $subject, false) }}" method="POST">
                     @csrf
                     @method('DELETE')
                     <button type="submit" onclick="return confirm('削除しますか？')">
