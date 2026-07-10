@@ -1,4 +1,4 @@
-const CACHE_NAME = "study-hint-app-v1";
+const CACHE_NAME = "study-hint-v5";
 
 self.addEventListener("install", (event) => {
     self.skipWaiting();
