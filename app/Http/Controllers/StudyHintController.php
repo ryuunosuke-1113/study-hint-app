@@ -6,6 +6,8 @@ use App\Models\StudyHint;
 use Illuminate\Http\Request;
 use App\Models\Subject;
 use App\Models\Book;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 class StudyHintController extends Controller
 {
@@ -74,13 +76,25 @@ class StudyHintController extends Controller
             'question_no_2' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
             'question_no_3' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
             'hint' => ['required', 'string'],
+
+            // 最大5MB
+            'image' => ['nullable', 'image', 'max:5120'],
         ]);
+
+        if ($request->hasFile('image')) {
+            $validated['image_url'] = $this->uploadImageToSupabase(
+                $request->file('image')
+            );
+        }
+
+        // imageはDBカラムではないので削除
+        unset($validated['image']);
+
         StudyHint::create($validated);
 
         return redirect()->route('study-hints.index')
             ->with('success', 'ヒントを登録しました。');
     }
-
     public function edit(StudyHint $studyHint)
     {
         $subjects = Subject::orderBy('name')->get();
@@ -97,18 +111,117 @@ class StudyHintController extends Controller
             'question_no_2' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
             'question_no_3' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
             'hint' => ['required', 'string'],
+            'image' => ['nullable', 'image', 'max:5120'],
         ]);
+
+        if ($request->hasFile('image')) {
+            $oldImageUrl = $studyHint->image_url;
+
+            // 先に新しい画像をアップロード
+            $validated['image_url'] = $this->uploadImageToSupabase(
+                $request->file('image')
+            );
+
+            // アップロード成功後、古い画像を削除
+            $this->deleteImageFromSupabase($oldImageUrl);
+        }
+
+        unset($validated['image']);
+
         $studyHint->update($validated);
 
         return redirect()->route('study-hints.index')
             ->with('success', 'ヒントを更新しました。');
     }
-
     public function destroy(StudyHint $studyHint)
     {
+        if ($studyHint->image_url) {
+            $this->deleteImageFromSupabase($studyHint->image_url);
+        }
+
         $studyHint->delete();
 
         return redirect()->route('study-hints.index')
             ->with('success', 'ヒントを削除しました。');
+    }
+    private function uploadImageToSupabase($file): string
+    {
+        $supabaseUrl = rtrim(config('services.supabase.url'), '/');
+        $supabaseKey = config('services.supabase.key');
+        $bucket = config('services.supabase.bucket');
+
+        if (!$supabaseUrl || !$supabaseKey || !$bucket) {
+            throw new \RuntimeException(
+                'Supabaseの接続設定が不足しています。'
+            );
+        }
+
+        $extension = strtolower(
+            $file->getClientOriginalExtension() ?: 'jpg'
+        );
+
+        $filePath = 'hints/' . Str::uuid() . '.' . $extension;
+
+        $uploadUrl =
+            "{$supabaseUrl}/storage/v1/object/{$bucket}/{$filePath}";
+
+        $response = Http::withHeaders([
+            'apikey' => $supabaseKey,
+            'Authorization' => 'Bearer ' . $supabaseKey,
+            'x-upsert' => 'false',
+        ])
+            ->withBody(
+                file_get_contents($file->getRealPath()),
+                $file->getMimeType()
+            )
+            ->post($uploadUrl);
+        if ($response->failed()) {
+            throw new \RuntimeException(
+                'Supabaseへの画像アップロードに失敗しました。'
+                . ' HTTP ' . $response->status()
+                . ' ' . $response->body()
+            );
+        }
+
+        return "{$supabaseUrl}/storage/v1/object/public/"
+            . "{$bucket}/{$filePath}";
+    }
+    private function deleteImageFromSupabase(?string $imageUrl): void
+    {
+        if (!$imageUrl) {
+            return;
+        }
+
+        $supabaseUrl = rtrim(config('services.supabase.url'), '/');
+        $supabaseKey = config('services.supabase.key');
+        $bucket = config('services.supabase.bucket');
+
+        $publicUrlPrefix =
+            "{$supabaseUrl}/storage/v1/object/public/{$bucket}/";
+
+        // URLから「hints/〇〇.jpg」の部分だけ取り出す
+        if (!str_starts_with($imageUrl, $publicUrlPrefix)) {
+            return;
+        }
+
+        $filePath = substr($imageUrl, strlen($publicUrlPrefix));
+
+        $deleteUrl =
+            "{$supabaseUrl}/storage/v1/object/{$bucket}";
+
+        $response = Http::withHeaders([
+            'apikey' => $supabaseKey,
+            'Authorization' => 'Bearer ' . $supabaseKey,
+        ])->delete($deleteUrl, [
+                    'prefixes' => [$filePath],
+                ]);
+
+        if ($response->failed()) {
+            throw new \RuntimeException(
+                '古い画像の削除に失敗しました。'
+                . ' HTTP ' . $response->status()
+                . ' ' . $response->body()
+            );
+        }
     }
 }

@@ -84,7 +84,12 @@
 
             <p>{{ $studyHint->hint }}</p>
 
-            <a href="{{ route('study-hints.edit', $studyHint) }}">編集</a>
+            @if ($studyHint->image_url)
+                <div class="hint-image-wrapper">
+                    <img src="{{ $studyHint->image_url }}" alt="ヒント画像" class="hint-thumbnail"
+                        data-full-image="{{ $studyHint->image_url }}">
+                </div>
+            @endif <a href="{{ route('study-hints.edit', $studyHint) }}">編集</a>
 
             <form action="{{ route('study-hints.destroy', $studyHint) }}" method="POST" style="display:inline;">
                 @csrf
@@ -94,5 +99,55 @@
                 </button>
             </form>
         </div>
+
+        <div id="image-lightbox" class="image-lightbox" aria-hidden="true">
+            <button type="button" id="lightbox-close" class="lightbox-close" aria-label="画像を閉じる">
+                ×
+            </button>
+
+            <img id="lightbox-image" class="lightbox-image" src="" alt="拡大表示">
+        </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const lightbox = document.getElementById('image-lightbox');
+                const lightboxImage = document.getElementById('lightbox-image');
+                const closeButton = document.getElementById('lightbox-close');
+                const thumbnails = document.querySelectorAll('.hint-thumbnail');
+
+                function openLightbox(imageUrl) {
+                    lightboxImage.src = imageUrl;
+                    lightbox.classList.add('is-open');
+                    lightbox.setAttribute('aria-hidden', 'false');
+                    document.body.style.overflow = 'hidden';
+                }
+
+                function closeLightbox() {
+                    lightbox.classList.remove('is-open');
+                    lightbox.setAttribute('aria-hidden', 'true');
+                    lightboxImage.src = '';
+                    document.body.style.overflow = '';
+                }
+
+                thumbnails.forEach(function(thumbnail) {
+                    thumbnail.addEventListener('click', function() {
+                        openLightbox(thumbnail.dataset.fullImage);
+                    });
+                });
+
+                closeButton.addEventListener('click', closeLightbox);
+
+                lightbox.addEventListener('click', function(event) {
+                    if (event.target === lightbox) {
+                        closeLightbox();
+                    }
+                });
+
+                document.addEventListener('keydown', function(event) {
+                    if (event.key === 'Escape' && lightbox.classList.contains('is-open')) {
+                        closeLightbox();
+                    }
+                });
+            });
+        </script>
     @endforeach
 @endsection

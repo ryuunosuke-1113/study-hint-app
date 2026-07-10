@@ -3,7 +3,8 @@
 @section('content')
     <h2>ヒント編集</h2>
 
-    <form action="{{ route('study-hints.update', $studyHint) }}" method="POST">
+    <form action="{{ route('study-hints.update', ['study_hint' => $studyHint->id]) }}" method="POST"
+        enctype="multipart/form-data">
         @csrf
         @method('PUT')
 

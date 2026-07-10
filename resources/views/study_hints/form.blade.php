@@ -1,4 +1,5 @@
-<label>科目</label>
+<label>
+    科目</label>
 <select name="subject_id" id="subject_id">
     <option value="">選択してください</option>
     @foreach ($subjects as $subject)
@@ -59,6 +60,28 @@
 @error('hint')
     <p style="color:red;">{{ $message }}</p>
 @enderror
+
+<br><br>
+
+<br><br>
+
+<label for="image">画像添付</label>
+
+<div id="image-paste-area" class="image-paste-area" contenteditable="true" role="textbox" aria-label="画像貼り付け欄">
+    <span id="paste-guide">
+        ここをタップして「ペースト」を選ぶと、コピーした画像を貼り付けられます。
+    </span>
+</div>
+
+<p id="paste-status" class="paste-status" hidden>
+    画像を貼り付けました。
+</p>
+
+<input type="file" name="image" id="image" accept="image/*">
+
+@error('image')
+    <p style="color:red;">{{ $message }}</p>
+@enderror
 <script>
     const subjectSelect = document.getElementById('subject_id');
     const bookSelect = document.getElementById('book_id');
@@ -93,4 +116,77 @@
     subjectSelect.addEventListener('change', function() {
         filterBooks(true);
     });
+    const pasteArea = document.getElementById('image-paste-area');
+    const imageInput = document.getElementById('image');
+    const pasteStatus = document.getElementById('paste-status');
+
+    pasteArea.addEventListener('paste', function(event) {
+        event.preventDefault();
+
+        const clipboardData = event.clipboardData;
+        const files = clipboardData?.files;
+        const items = clipboardData?.items;
+
+        let imageFile = null;
+
+        // まず files から探す
+        if (files && files.length > 0) {
+            for (const file of files) {
+                if (file.type.startsWith('image/')) {
+                    imageFile = file;
+                    break;
+                }
+            }
+        }
+
+        // filesになければitemsから探す
+        if (!imageFile && items) {
+            for (const item of items) {
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    imageFile = item.getAsFile();
+                    break;
+                }
+            }
+        }
+
+        if (!imageFile) {
+            pasteStatus.textContent =
+                '画像を取得できませんでした。下のファイル選択を利用してください。';
+            pasteStatus.hidden = false;
+            return;
+        }
+
+        try {
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(imageFile);
+            imageInput.files = dataTransfer.files;
+
+            if (imageInput.files.length === 0) {
+                throw new Error('ファイル入力へ画像を設定できませんでした。');
+            }
+
+            pasteStatus.textContent =
+                `画像を貼り付けました：${imageFile.name || 'clipboard-image.png'}`;
+            pasteStatus.hidden = false;
+
+            pasteArea.textContent = '画像を貼り付け済みです';
+            pasteArea.classList.add('has-image');
+
+            console.log('貼り付け画像:', imageInput.files[0]);
+        } catch (error) {
+            console.error(error);
+
+            pasteStatus.textContent =
+                'この端末では貼り付け画像を送信できません。下のファイル選択を利用してください。';
+            pasteStatus.hidden = false;
+        }
+    });
+    const studyHintForm = document.getElementById('study-hint-form');
+
+    if (studyHintForm) {
+        studyHintForm.addEventListener('submit', function() {
+            console.log('送信する画像数:', imageInput.files.length);
+            console.log('送信する画像:', imageInput.files[0] ?? null);
+        });
+    }
 </script>

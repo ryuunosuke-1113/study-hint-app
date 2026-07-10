@@ -13,8 +13,8 @@ class StudyHint extends Model
         'question_no_2',
         'question_no_3',
         'hint',
+        'image_url',
     ];
-
     public function book()
     {
         return $this->belongsTo(Book::class);

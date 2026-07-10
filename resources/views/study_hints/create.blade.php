@@ -3,8 +3,7 @@
 @section('content')
     <h2>ヒント追加</h2>
 
-    <form action="{{ route('study-hints.store') }}" method="POST">
-        @csrf
+    <form id="study-hint-form" action="{{ route('study-hints.store') }}" method="POST" enctype="multipart/form-data"> @csrf
 
         @include('study_hints.form')
 
