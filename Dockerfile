@@ -25,3 +25,5 @@ RUN a2enmod rewrite
 COPY ./apache.conf /etc/apache2/sites-available/000-default.conf
 
 CMD php artisan migrate --force && apache2-foreground
+
+COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
