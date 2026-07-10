@@ -14,6 +14,7 @@ class StudyHint extends Model
         'question_no_3',
         'hint',
         'image_url',
+        'image_url_2',
     ];
     public function book()
     {

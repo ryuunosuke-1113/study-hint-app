@@ -84,10 +84,14 @@
 
             <p>{{ $studyHint->hint }}</p>
 
-            @if ($studyHint->image_url)
-                <div class="hint-image-wrapper">
-                    <img src="{{ $studyHint->image_url }}" alt="ヒント画像" class="hint-thumbnail"
-                        data-full-image="{{ $studyHint->image_url }}">
+            @if ($studyHint->image_url || $studyHint->image_url_2)
+                <div class="hint-images">
+                    @foreach ([$studyHint->image_url, $studyHint->image_url_2] as $imageUrl)
+                        @if ($imageUrl)
+                            <img src="{{ $imageUrl }}" alt="ヒント画像" class="hint-thumbnail"
+                                data-full-image="{{ $imageUrl }}">
+                        @endif
+                    @endforeach
                 </div>
             @endif <a href="{{ route('study-hints.edit', $studyHint) }}">編集</a>
 

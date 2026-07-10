@@ -77,9 +77,15 @@
     画像を貼り付けました。
 </p>
 
-<input type="file" name="image" id="image" accept="image/*">
+<input type="file" name="images[]" id="images" accept="image/*" multiple>
 
-@error('image')
+<p>画像は最大2枚まで登録できます。</p>
+
+@error('images')
+    <p style="color:red;">{{ $message }}</p>
+@enderror
+
+@error('images.*')
     <p style="color:red;">{{ $message }}</p>
 @enderror
 <script>

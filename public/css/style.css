@@ -184,3 +184,9 @@ img.hint-thumbnail {
     margin: 8px 0;
     color: #267326;
 }
+.hint-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 12px 0;
+}
