@@ -72,10 +72,18 @@ class StudyHintController extends Controller
         $validated = $request->validate([
             'book_id' => ['required', 'exists:books,id'],
             'page_number' => ['required', 'integer', 'min:1'],
-            'question_no_1' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
-            'question_no_2' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
-            'question_no_3' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
-
+            'question_no_1' => [
+                'nullable',
+                'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
+            ],
+            'question_no_2' => [
+                'nullable',
+                'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
+            ],
+            'question_no_3' => [
+                'nullable',
+                'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
+            ],
             'hint' => ['nullable', 'string', 'required_without:image'],
             'image' => ['nullable', 'image', 'max:5120', 'required_without:hint'],
         ], [
@@ -114,10 +122,18 @@ class StudyHintController extends Controller
         $validated = $request->validate([
             'book_id' => ['required', 'exists:books,id'],
             'page_number' => ['required', 'integer', 'min:1'],
-            'question_no_1' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
-            'question_no_2' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
-            'question_no_3' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
-
+            'question_no_1' => [
+                'nullable',
+                'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
+            ],
+            'question_no_2' => [
+                'nullable',
+                'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
+            ],
+            'question_no_3' => [
+                'nullable',
+                'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
+            ],
             'hint' => ['nullable', 'string', 'required_without_all:image,current_image'],
             'image' => ['nullable', 'image', 'max:5120'],
             'current_image' => ['nullable', 'string'],

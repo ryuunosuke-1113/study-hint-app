@@ -35,21 +35,21 @@
 @enderror
 
 <label>大問番号1</label>
-<input type="text" name="question_no_1" maxlength="1"
+<input type="text" name="question_no_1" maxlength="4"
     value="{{ old('question_no_1', $studyHint->question_no_1 ?? '') }}">
 @error('question_no_1')
     <p style="color:red;">{{ $message }}</p>
 @enderror
 
 <label>大問番号2</label>
-<input type="text" name="question_no_2" maxlength="1"
+<input type="text" name="question_no_2" maxlength="4"
     value="{{ old('question_no_2', $studyHint->question_no_2 ?? '') }}">
 @error('question_no_2')
     <p style="color:red;">{{ $message }}</p>
 @enderror
 
 <label>大問番号3</label>
-<input type="text" name="question_no_3" maxlength="1"
+<input type="text" name="question_no_3" maxlength="4"
     value="{{ old('question_no_3', $studyHint->question_no_3 ?? '') }}">
 @error('question_no_3')
     <p style="color:red;">{{ $message }}</p>
