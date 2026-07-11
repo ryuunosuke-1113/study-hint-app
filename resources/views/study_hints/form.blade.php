@@ -67,24 +67,21 @@
 
 <label for="image">画像添付</label>
 
-<div id="image-paste-area" class="image-paste-area" contenteditable="true" role="textbox" aria-label="画像貼り付け欄">
-    <span id="paste-guide">
-        ここをタップして「ペースト」を選ぶと、コピーした画像を貼り付けられます。
-    </span>
-</div>
+@if (!empty($studyHint?->image_url))
+    <p>現在の画像が登録されています。</p>
 
-<p id="paste-status" class="paste-status" hidden>
-    画像を貼り付けました。
+    <input type="hidden" name="current_image" value="{{ $studyHint->image_url }}">
+@endif
+
+<input type="file" name="image" id="image" accept="image/*">
+
+<p>
+    画像は1枚まで登録できます。
 </p>
 
-<input type="file" name="images[]" id="images" accept="image/*" multiple>
-
-<p>画像は最大2枚まで登録できます。</p>
-
-@error('images')
+@error('image')
     <p style="color:red;">{{ $message }}</p>
 @enderror
-
 @error('images.*')
     <p style="color:red;">{{ $message }}</p>
 @enderror

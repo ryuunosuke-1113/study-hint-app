@@ -76,35 +76,26 @@ class StudyHintController extends Controller
             'question_no_2' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
             'question_no_3' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
 
-            'hint' => ['nullable', 'string', 'required_without:images'],
-            'images' => ['nullable', 'array', 'max:2', 'required_without:hint'],
-            'images.*' => ['image', 'max:5120'],
+            'hint' => ['nullable', 'string', 'required_without:image'],
+            'image' => ['nullable', 'image', 'max:5120', 'required_without:hint'],
         ], [
             'hint.required_without' =>
                 'ヒント文章または画像のどちらかを入力してください。',
-            'images.required_without' =>
+            'image.required_without' =>
                 'ヒント文章または画像のどちらかを入力してください。',
-            'images.max' =>
-                '画像は最大2枚まで登録できます。',
-            'images.*.image' =>
+            'image.image' =>
                 '画像ファイルを選択してください。',
-            'images.*.max' =>
-                '画像は1枚につき5MB以内にしてください。',
+            'image.max' =>
+                '画像は5MB以内にしてください。',
         ]);
 
-        $files = $request->file('images', []);
-
-        if (isset($files[0])) {
-            $validated['image_url'] =
-                $this->uploadImageToSupabase($files[0]);
+        if ($request->hasFile('image')) {
+            $validated['image_url'] = $this->uploadImageToSupabase(
+                $request->file('image')
+            );
         }
 
-        if (isset($files[1])) {
-            $validated['image_url_2'] =
-                $this->uploadImageToSupabase($files[1]);
-        }
-
-        unset($validated['images']);
+        unset($validated['image']);
 
         StudyHint::create($validated);
 
@@ -126,23 +117,33 @@ class StudyHintController extends Controller
             'question_no_1' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
             'question_no_2' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
             'question_no_3' => ['nullable', 'regex:/^[0-9A-Za-zァ-ン]$/u'],
-            'hint' => ['required', 'string'],
+
+            'hint' => ['nullable', 'string', 'required_without_all:image,current_image'],
             'image' => ['nullable', 'image', 'max:5120'],
+            'current_image' => ['nullable', 'string'],
+        ], [
+            'hint.required_without_all' =>
+                'ヒント文章または画像のどちらかを入力してください。',
+            'image.image' =>
+                '画像ファイルを選択してください。',
+            'image.max' =>
+                '画像は5MB以内にしてください。',
         ]);
 
         if ($request->hasFile('image')) {
             $oldImageUrl = $studyHint->image_url;
 
-            // 先に新しい画像をアップロード
             $validated['image_url'] = $this->uploadImageToSupabase(
                 $request->file('image')
             );
 
-            // アップロード成功後、古い画像を削除
             $this->deleteImageFromSupabase($oldImageUrl);
         }
 
-        unset($validated['image']);
+        unset(
+            $validated['image'],
+            $validated['current_image']
+        );
 
         $studyHint->update($validated);
 
