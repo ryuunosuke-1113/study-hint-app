@@ -190,3 +190,32 @@ img.hint-thumbnail {
     gap: 12px;
     margin: 12px 0;
 }
+.image-paste-area {
+    min-height: 70px;
+    margin: 10px 0;
+    padding: 18px;
+    border: 2px dashed #aaa;
+    border-radius: 10px;
+    background: #fafafa;
+    text-align: center;
+    line-height: 1.6;
+    cursor: text;
+    outline: none;
+    overflow-wrap: anywhere;
+}
+
+.image-paste-area:focus {
+    border-color: #8b6f47;
+    background: #fffdf8;
+}
+
+.image-paste-area.has-image {
+    min-height: auto;
+    border-style: solid;
+    background: #eef8ee;
+}
+
+.paste-status {
+    margin: 8px 0;
+    color: #267326;
+}

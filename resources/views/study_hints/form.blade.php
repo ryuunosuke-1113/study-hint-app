@@ -73,200 +73,170 @@
     <input type="hidden" name="current_image" value="{{ $studyHint->image_url }}">
 @endif
 
+<div id="image-paste-area" class="image-paste-area" contenteditable="true" role="textbox" aria-label="画像貼り付け欄">
+    ここをタップまたはクリックして、スクリーンショットを貼り付けてください
+</div>
+
+<p id="paste-status" class="paste-status" hidden></p>
+
 <input type="file" name="image" id="image" accept="image/*">
 
-<p>
-    画像は1枚まで登録できます。
-</p>
+<p>画像は1枚まで登録できます。</p>
 
 @error('image')
     <p style="color:red;">{{ $message }}</p>
 @enderror
-@error('images.*')
-    <p style="color:red;">{{ $message }}</p>
-@enderror
 <script>
-    const subjectSelect = document.getElementById('subject_id');
-    const bookSelect = document.getElementById('book_id');
-    const allBookOptions = Array.from(bookSelect.options);
+    document.addEventListener('DOMContentLoaded', function() {
+        /*
+         * 科目に応じて参考書を絞り込む処理
+         */
+        const subjectSelect = document.getElementById('subject_id');
+        const bookSelect = document.getElementById('book_id');
 
-    function filterBooks(resetBook = false) {
-        const selectedSubjectId = subjectSelect.value;
-        const currentBookId = bookSelect.value;
+        if (subjectSelect && bookSelect) {
+            const allBookOptions = Array.from(bookSelect.options);
 
-        bookSelect.innerHTML = '';
+            function filterBooks(resetBook = false) {
+                const selectedSubjectId = subjectSelect.value;
+                const currentBookId = bookSelect.value;
 
-        allBookOptions.forEach(option => {
-            if (option.value === '') {
-                bookSelect.appendChild(option);
+                bookSelect.innerHTML = '';
+
+                allBookOptions.forEach(function(option) {
+                    if (
+                        option.value === '' ||
+                        option.dataset.subjectId === selectedSubjectId
+                    ) {
+                        bookSelect.appendChild(option);
+                    }
+                });
+
+                bookSelect.value = resetBook ? '' : currentBookId;
+            }
+
+            filterBooks(false);
+
+            subjectSelect.addEventListener('change', function() {
+                filterBooks(true);
+            });
+        }
+
+        /*
+         * 画像1枚のファイル選択・クリップボード貼り付け処理
+         */
+        const pasteArea = document.getElementById('image-paste-area');
+        const imageInput = document.getElementById('image');
+        const pasteStatus = document.getElementById('paste-status');
+
+        if (!pasteArea || !imageInput || !pasteStatus) {
+            return;
+        }
+
+        function showStatus(message, isError = false) {
+            pasteStatus.textContent = message;
+            pasteStatus.hidden = false;
+            pasteStatus.style.color = isError ? 'red' : '#267326';
+        }
+
+        function setImageFile(imageFile) {
+            if (!imageFile || !imageFile.type.startsWith('image/')) {
+                showStatus('画像ファイルを取得できませんでした。', true);
                 return;
             }
 
-            if (option.dataset.subjectId === selectedSubjectId) {
-                bookSelect.appendChild(option);
+            try {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(imageFile);
+                imageInput.files = dataTransfer.files;
+
+                if (imageInput.files.length !== 1) {
+                    throw new Error(
+                        '画像をファイル入力へ設定できませんでした。'
+                    );
+                }
+
+                pasteArea.textContent = '画像を貼り付け済みです';
+                pasteArea.classList.add('has-image');
+
+                showStatus(
+                    '画像を貼り付けました。登録ボタンを押してください。'
+                );
+            } catch (error) {
+                console.error(error);
+
+                showStatus(
+                    'この端末では貼り付け画像を送信できません。下のファイル選択を利用してください。',
+                    true
+                );
             }
-        });
-
-        if (resetBook) {
-            bookSelect.value = '';
-        } else {
-            bookSelect.value = currentBookId;
-        }
-    }
-
-    filterBooks(false);
-
-    subjectSelect.addEventListener('change', function() {
-        filterBooks(true);
-    });
-    const pasteArea = document.getElementById('image-paste-area');
-    const imageInput = document.getElementById('images');
-    const pasteStatus = document.getElementById('paste-status');
-
-    let selectedImages = Array.from(imageInput.files ?? []);
-
-    function syncImageInput() {
-        const dataTransfer = new DataTransfer();
-
-        selectedImages.forEach(function(file) {
-            dataTransfer.items.add(file);
-        });
-
-        imageInput.files = dataTransfer.files;
-    }
-
-    function updateImageStatus() {
-        if (selectedImages.length === 0) {
-            pasteStatus.hidden = true;
-            return;
         }
 
-        pasteStatus.textContent =
-            `画像を${selectedImages.length}枚設定しました。`;
+        pasteArea.addEventListener('paste', function(event) {
+            event.preventDefault();
 
-        pasteStatus.hidden = false;
-        pasteArea.classList.add('has-image');
-    }
+            const clipboardData = event.clipboardData;
+            let imageFile = null;
 
-    imageInput.addEventListener('change', function() {
-        const files = Array.from(imageInput.files);
-
-        if (files.length > 2) {
-            selectedImages = [];
-            imageInput.value = '';
-
-            pasteStatus.textContent =
-                '画像は最大2枚まで登録できます。';
-
-            pasteStatus.hidden = false;
-            return;
-        }
-
-        selectedImages = files;
-        updateImageStatus();
-    });
-
-    pasteArea.addEventListener('paste', function(event) {
-        event.preventDefault();
-
-        if (selectedImages.length >= 2) {
-            pasteStatus.textContent =
-                '画像は最大2枚まで登録できます。';
-
-            pasteStatus.hidden = false;
-            return;
-        }
-
-        const clipboardData = event.clipboardData;
-        let pastedImage = null;
-
-        if (clipboardData?.files) {
-            for (const file of clipboardData.files) {
-                if (file.type.startsWith('image/')) {
-                    pastedImage = file;
-                    break;
+            if (clipboardData?.files) {
+                for (const file of clipboardData.files) {
+                    if (file.type.startsWith('image/')) {
+                        imageFile = file;
+                        break;
+                    }
                 }
             }
-        }
 
-        if (!pastedImage && clipboardData?.items) {
-            for (const item of clipboardData.items) {
-                if (
-                    item.kind === 'file' &&
-                    item.type.startsWith('image/')
-                ) {
-                    pastedImage = item.getAsFile();
-                    break;
+            if (!imageFile && clipboardData?.items) {
+                for (const item of clipboardData.items) {
+                    if (
+                        item.kind === 'file' &&
+                        item.type.startsWith('image/')
+                    ) {
+                        imageFile = item.getAsFile();
+                        break;
+                    }
                 }
             }
-        }
 
-        if (!pastedImage) {
-            pasteStatus.textContent =
-                'クリップボードから画像を取得できませんでした。';
+            if (!imageFile) {
+                showStatus(
+                    'クリップボードから画像を取得できませんでした。',
+                    true
+                );
+                return;
+            }
 
-            pasteStatus.hidden = false;
-            return;
-        }
-
-        try {
-            selectedImages.push(pastedImage);
-            syncImageInput();
-            updateImageStatus();
-
-            pasteStatus.textContent =
-                `画像を貼り付けました。現在${selectedImages.length}枚です。`;
-        } catch (error) {
-            console.error(error);
-
-            selectedImages.pop();
-
-            pasteStatus.textContent =
-                '貼り付け画像をファイル欄へ設定できませんでした。';
-            pasteStatus.hidden = false;
-        }
-    });
-    try {
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(imageFile);
-        imageInput.files = dataTransfer.files;
-
-        if (imageInput.files.length === 0) {
-            throw new Error('ファイル入力へ画像を設定できませんでした。');
-        }
-
-        pasteStatus.textContent =
-            `画像を貼り付けました：${imageFile.name || 'clipboard-image.png'}`;
-        pasteStatus.hidden = false;
-
-        pasteArea.textContent = '画像を貼り付け済みです';
-        pasteArea.classList.add('has-image');
-
-        console.log('貼り付け画像:', imageInput.files[0]);
-    } catch (error) {
-        console.error(error);
-
-        pasteStatus.textContent =
-            'この端末では貼り付け画像を送信できません。下のファイル選択を利用してください。';
-        pasteStatus.hidden = false;
-    }
-    });
-    const studyHintForm = document.getElementById('study-hint-form');
-
-    if (studyHintForm) {
-        studyHintForm.addEventListener('submit', function() {
-            console.log('送信する画像数:', imageInput.files.length);
-            console.log('送信する画像:', imageInput.files[0] ?? null);
+            setImageFile(imageFile);
         });
-    }
-    const studyHintForm = document.getElementById('study-hint-form');
 
-    if (studyHintForm) {
-        studyHintForm.addEventListener('submit', function() {
-            console.log(
-                '送信画像数:',
-                imageInput.files.length
+        imageInput.addEventListener('change', function() {
+            const file = imageInput.files[0];
+
+            if (!file) {
+                pasteStatus.hidden = true;
+                pasteArea.textContent =
+                    'ここをタップまたはクリックして、スクリーンショットを貼り付けてください';
+                pasteArea.classList.remove('has-image');
+                return;
+            }
+
+            if (!file.type.startsWith('image/')) {
+                imageInput.value = '';
+
+                showStatus(
+                    '画像ファイルを選択してください。',
+                    true
+                );
+                return;
+            }
+
+            pasteArea.textContent = '画像を選択済みです';
+            pasteArea.classList.add('has-image');
+
+            showStatus(
+                '画像を選択しました。登録ボタンを押してください。'
             );
         });
-    }
+    });
 </script>
