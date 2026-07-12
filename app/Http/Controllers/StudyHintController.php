@@ -8,6 +8,9 @@ use App\Models\Subject;
 use App\Models\Book;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use App\Models\ProblemHint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class StudyHintController extends Controller
 {
@@ -16,11 +19,23 @@ class StudyHintController extends Controller
         $subjects = Subject::orderBy('name')->get();
         $books = Book::with('subject')->orderBy('name')->get();
 
-        $query = StudyHint::with('book.subject')
-            ->join('books', 'study_hints.book_id', '=', 'books.id')
-            ->join('subjects', 'books.subject_id', '=', 'subjects.id')
+        $query = StudyHint::with([
+            'book.subject',
+            'problemHints',
+        ])
+            ->join(
+                'books',
+                'study_hints.book_id',
+                '=',
+                'books.id'
+            )
+            ->join(
+                'subjects',
+                'books.subject_id',
+                '=',
+                'subjects.id'
+            )
             ->select('study_hints.*');
-
         if ($request->filled('subject_id')) {
             $query->where('subjects.id', $request->subject_id);
         }
@@ -42,9 +57,25 @@ class StudyHintController extends Controller
         }
 
         if ($request->filled('hint')) {
-            $query->where('hint', 'like', '%' . $request->hint . '%');
-        }
+            $searchHint = $request->hint;
 
+            $query->where(function ($q) use ($searchHint) {
+
+                /*
+                 * 新形式の複数ヒントを検索します。
+                 */
+                $q->orWhereHas(
+                    'problemHints',
+                    function ($problemHintQuery) use ($searchHint) {
+                        $problemHintQuery->where(
+                            'content',
+                            'like',
+                            '%' . $searchHint . '%'
+                        );
+                    }
+                );
+            });
+        }
         $studyHints = $query
             ->orderBy('subjects.name')
             ->orderBy('books.name')
@@ -70,112 +101,518 @@ class StudyHintController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'book_id' => ['required', 'exists:books,id'],
-            'page_number' => ['required', 'integer', 'min:1'],
+            'book_id' => [
+                'required',
+                'exists:books,id',
+            ],
+
+            'page_number' => [
+                'required',
+                'integer',
+                'min:1',
+            ],
+
             'question_no_1' => [
                 'nullable',
                 'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
             ],
+
             'question_no_2' => [
                 'nullable',
                 'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
             ],
+
             'question_no_3' => [
                 'nullable',
                 'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
             ],
-            'hint' => ['nullable', 'string', 'required_without:image'],
-            'image' => ['nullable', 'image', 'max:5120', 'required_without:hint'],
+
+            'hints' => [
+                'nullable',
+                'array',
+                'max:3',
+            ],
+
+            'hints.*.content' => [
+                'nullable',
+                'string',
+            ],
+
+            'hints.*.image' => [
+                'nullable',
+                'image',
+                'max:5120',
+            ],
         ], [
-            'hint.required_without' =>
-                'ヒント文章または画像のどちらかを入力してください。',
-            'image.required_without' =>
-                'ヒント文章または画像のどちらかを入力してください。',
-            'image.image' =>
+            'hints.max' =>
+                'ヒントは3個まで登録できます。',
+
+            'hints.*.image.image' =>
                 '画像ファイルを選択してください。',
-            'image.max' =>
-                '画像は5MB以内にしてください。',
+
+            'hints.*.image.max' =>
+                '画像は1枚につき5MB以内にしてください。',
         ]);
 
-        if ($request->hasFile('image')) {
-            $validated['image_url'] = $this->uploadImageToSupabase(
-                $request->file('image')
+        $enteredHints = [];
+
+        for ($index = 0; $index < 3; $index++) {
+            $content = trim(
+                (string) $request->input(
+                    "hints.$index.content",
+                    ''
+                )
             );
+
+            $imageFile = $request->file(
+                "hints.$index.image"
+            );
+
+            if ($content !== '' || $imageFile) {
+                $enteredHints[] = [
+                    'index' => $index,
+                    'content' => $content !== ''
+                        ? $content
+                        : null,
+                ];
+            }
         }
 
-        unset($validated['image']);
+        if (empty($enteredHints)) {
+            throw ValidationException::withMessages([
+                'hints' =>
+                    'ヒント文章または画像を、少なくとも1つ登録してください。',
+            ]);
+        }
 
-        StudyHint::create($validated);
+        DB::transaction(function () use ($request, $validated, $enteredHints) {
+            $studyHint = StudyHint::create([
+                'book_id' => $validated['book_id'],
+                'page_number' => $validated['page_number'],
 
-        return redirect()->route('study-hints.index')
-            ->with('success', 'ヒントを登録しました。');
+                'question_no_1' =>
+                    $validated['question_no_1'] ?? null,
+
+                'question_no_2' =>
+                    $validated['question_no_2'] ?? null,
+
+                'question_no_3' =>
+                    $validated['question_no_3'] ?? null,
+
+            ]);
+
+            foreach ($enteredHints as $hintData) {
+                $index = $hintData['index'];
+
+                $imageFile = $request->file(
+                    "hints.$index.image"
+                );
+
+                $imageUrl = null;
+
+                if ($imageFile) {
+                    $imageUrl =
+                        $this->uploadImageToSupabase(
+                            $imageFile
+                        );
+                }
+
+                ProblemHint::create([
+                    'study_hint_id' => $studyHint->id,
+                    'hint_order' => $index + 1,
+                    'content' => $hintData['content'],
+                    'image_url' => $imageUrl,
+                ]);
+            }
+        });
+
+        return redirect()
+            ->route('study-hints.index')
+            ->with(
+                'success',
+                '問題とヒントを登録しました。'
+            );
     }
     public function edit(StudyHint $studyHint)
     {
-        $subjects = Subject::orderBy('name')->get();
-        $books = Book::with('subject')->orderBy('name')->get();
+        $studyHint->load('problemHints');
 
-        return view('study_hints.edit', compact('studyHint', 'subjects', 'books'));
+        $subjects = Subject::orderBy('name')->get();
+        $books = Book::with('subject')
+            ->orderBy('name')
+            ->get();
+
+        return view(
+            'study_hints.edit',
+            compact(
+                'studyHint',
+                'subjects',
+                'books'
+            )
+        );
     }
     public function update(Request $request, StudyHint $studyHint)
     {
         $validated = $request->validate([
-            'book_id' => ['required', 'exists:books,id'],
-            'page_number' => ['required', 'integer', 'min:1'],
+            'book_id' => [
+                'required',
+                'exists:books,id',
+            ],
+
+            'page_number' => [
+                'required',
+                'integer',
+                'min:1',
+            ],
+
             'question_no_1' => [
                 'nullable',
                 'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
             ],
+
             'question_no_2' => [
                 'nullable',
                 'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
             ],
+
             'question_no_3' => [
                 'nullable',
                 'regex:/^(?:[0-9]{1,4}|[A-Za-zァ-ン])$/u',
             ],
-            'hint' => ['nullable', 'string', 'required_without_all:image,current_image'],
-            'image' => ['nullable', 'image', 'max:5120'],
-            'current_image' => ['nullable', 'string'],
+
+            'hints' => [
+                'nullable',
+                'array',
+                'max:3',
+            ],
+
+            'hints.*.content' => [
+                'nullable',
+                'string',
+            ],
+
+            'hints.*.image' => [
+                'nullable',
+                'image',
+                'max:5120',
+            ],
+
+            'hints.*.current_image' => [
+                'nullable',
+                'string',
+            ],
+
+            'hints.*.remove_image' => [
+                'nullable',
+                'boolean',
+            ],
         ], [
-            'hint.required_without_all' =>
-                'ヒント文章または画像のどちらかを入力してください。',
-            'image.image' =>
+            'hints.max' =>
+                'ヒントは3個まで登録できます。',
+
+            'hints.*.image.image' =>
                 '画像ファイルを選択してください。',
-            'image.max' =>
-                '画像は5MB以内にしてください。',
+
+            'hints.*.image.max' =>
+                '画像は1枚につき5MB以内にしてください。',
         ]);
 
-        if ($request->hasFile('image')) {
-            $oldImageUrl = $studyHint->image_url;
+        /*
+         * 現在登録されているヒントを
+         * hint_orderをキーにして取得します。
+         */
+        $studyHint->load('problemHints');
 
-            $validated['image_url'] = $this->uploadImageToSupabase(
-                $request->file('image')
+        $existingHints = $studyHint->problemHints
+            ->keyBy('hint_order');
+
+        /*
+         * 更新後にも、文章または画像が
+         * 1つ以上残るか確認します。
+         */
+        $hasAtLeastOneHint = false;
+
+        for ($index = 0; $index < 3; $index++) {
+            $hintOrder = $index + 1;
+            $existingHint = $existingHints->get($hintOrder);
+
+            $content = trim(
+                (string) $request->input(
+                    "hints.$index.content",
+                    ''
+                )
             );
 
-            $this->deleteImageFromSupabase($oldImageUrl);
+            $newImage = $request->file(
+                "hints.$index.image"
+            );
+
+            $removeImage = $request->boolean(
+                "hints.$index.remove_image"
+            );
+
+            $keepsExistingImage =
+                $existingHint?->image_url
+                && !$removeImage;
+
+            if (
+                $content !== ''
+                || $newImage
+                || $keepsExistingImage
+            ) {
+                $hasAtLeastOneHint = true;
+                break;
+            }
         }
 
-        unset(
-            $validated['image'],
-            $validated['current_image']
-        );
+        if (!$hasAtLeastOneHint) {
+            throw ValidationException::withMessages([
+                'hints' =>
+                    'ヒント文章または画像を、少なくとも1つ残してください。',
+            ]);
+        }
 
-        $studyHint->update($validated);
+        /*
+         * 新しくアップロードした画像と、
+         * 更新後に削除する古い画像を記録します。
+         */
+        $uploadedImageUrls = [];
+        $imagesToDelete = [];
 
-        return redirect()->route('study-hints.index')
-            ->with('success', 'ヒントを更新しました。');
+        try {
+            DB::transaction(function () use ($request, $validated, $studyHint, $existingHints, &$uploadedImageUrls, &$imagesToDelete) {
+                /*
+                 * 問題の基本情報を更新します。
+                 */
+                $studyHint->update([
+                    'book_id' =>
+                        $validated['book_id'],
+
+                    'page_number' =>
+                        $validated['page_number'],
+
+                    'question_no_1' =>
+                        $validated['question_no_1'] ?? null,
+
+                    'question_no_2' =>
+                        $validated['question_no_2'] ?? null,
+
+                    'question_no_3' =>
+                        $validated['question_no_3'] ?? null,
+                ]);
+
+                /*
+                 * ヒント1〜3を順番に更新します。
+                 */
+                for ($index = 0; $index < 3; $index++) {
+                    $hintOrder = $index + 1;
+
+                    $existingHint = $existingHints->get(
+                        $hintOrder
+                    );
+
+                    $content = trim(
+                        (string) $request->input(
+                            "hints.$index.content",
+                            ''
+                        )
+                    );
+
+                    $newImage = $request->file(
+                        "hints.$index.image"
+                    );
+
+                    $removeImage = $request->boolean(
+                        "hints.$index.remove_image"
+                    );
+
+                    $oldImageUrl =
+                        $existingHint?->image_url;
+
+                    $finalImageUrl = $oldImageUrl;
+
+                    /*
+                     * 新しい画像が選択された場合は、
+                     * Supabaseへアップロードします。
+                     */
+                    if ($newImage) {
+                        $finalImageUrl =
+                            $this->uploadImageToSupabase(
+                                $newImage
+                            );
+
+                        $uploadedImageUrls[] =
+                            $finalImageUrl;
+
+                        if ($oldImageUrl) {
+                            $imagesToDelete[] =
+                                $oldImageUrl;
+                        }
+                    } elseif ($removeImage) {
+                        /*
+                         * 画像削除が選択された場合。
+                         */
+                        $finalImageUrl = null;
+
+                        if ($oldImageUrl) {
+                            $imagesToDelete[] =
+                                $oldImageUrl;
+                        }
+                    }
+
+                    /*
+                     * 文章も画像もなくなった場合は、
+                     * ProblemHint自体を削除します。
+                     */
+                    if (
+                        $content === ''
+                        && !$finalImageUrl
+                    ) {
+                        if ($existingHint) {
+                            $existingHint->delete();
+                        }
+
+                        continue;
+                    }
+
+                    $hintValues = [
+                        'content' =>
+                            $content !== ''
+                            ? $content
+                            : null,
+
+                        'image_url' =>
+                            $finalImageUrl,
+                    ];
+
+                    /*
+                     * 既存のヒントなら更新、
+                     * 未登録の枠なら新規作成します。
+                     */
+                    if ($existingHint) {
+                        $existingHint->update(
+                            $hintValues
+                        );
+                    } else {
+                        ProblemHint::create([
+                            'study_hint_id' =>
+                                $studyHint->id,
+
+                            'hint_order' =>
+                                $hintOrder,
+
+                            ...$hintValues,
+                        ]);
+                    }
+                }
+            });
+        } catch (\Throwable $exception) {
+            /*
+             * DB更新が失敗した場合、
+             * 今回新しくアップロードした画像を
+             * Supabaseから削除します。
+             */
+            foreach ($uploadedImageUrls as $uploadedImageUrl) {
+                try {
+                    $this->deleteImageFromSupabase(
+                        $uploadedImageUrl
+                    );
+                } catch (\Throwable $cleanupException) {
+                    report($cleanupException);
+                }
+            }
+
+            throw $exception;
+        }
+
+        /*
+         * DB更新が成功した後で、
+         * 差し替え前または削除対象の画像を消します。
+         */
+        $imageDeleteFailed = false;
+
+        foreach (
+            array_unique($imagesToDelete)
+            as $imageUrl
+        ) {
+            try {
+                $this->deleteImageFromSupabase(
+                    $imageUrl
+                );
+            } catch (\Throwable $exception) {
+                report($exception);
+                $imageDeleteFailed = true;
+            }
+        }
+
+        $redirect = redirect()
+            ->route('study-hints.index')
+            ->with(
+                'success',
+                '問題とヒントを更新しました。'
+            );
+
+        if ($imageDeleteFailed) {
+            $redirect->with(
+                'warning',
+                '更新は完了しましたが、一部の古い画像を削除できませんでした。'
+            );
+        }
+
+        return $redirect;
     }
     public function destroy(StudyHint $studyHint)
     {
-        if ($studyHint->image_url) {
-            $this->deleteImageFromSupabase($studyHint->image_url);
+        /*
+         * 削除対象のProblemHintと画像を取得します。
+         */
+        $studyHint->load('problemHints');
+
+        $imageUrls = $studyHint->problemHints
+            ->pluck('image_url')
+            ->filter()
+            ->unique()
+            ->values();
+
+        /*
+         * 先にDB上のProblemHintとStudyHintを削除します。
+         */
+        DB::transaction(function () use ($studyHint) {
+            $studyHint->problemHints()->delete();
+            $studyHint->delete();
+        });
+
+        /*
+         * Supabase上の画像を削除します。
+         */
+        $imageDeleteFailed = false;
+
+        foreach ($imageUrls as $imageUrl) {
+            try {
+                $this->deleteImageFromSupabase(
+                    $imageUrl
+                );
+            } catch (\Throwable $exception) {
+                report($exception);
+                $imageDeleteFailed = true;
+            }
         }
 
-        $studyHint->delete();
+        $redirect = redirect()
+            ->route('study-hints.index')
+            ->with(
+                'success',
+                '問題とヒントを削除しました。'
+            );
 
-        return redirect()->route('study-hints.index')
-            ->with('success', 'ヒントを削除しました。');
+        if ($imageDeleteFailed) {
+            $redirect->with(
+                'warning',
+                '問題は削除しましたが、一部の画像をSupabaseから削除できませんでした。'
+            );
+        }
+
+        return $redirect;
     }
     private function uploadImageToSupabase($file): string
     {

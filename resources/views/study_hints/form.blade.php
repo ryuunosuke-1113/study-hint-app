@@ -1,20 +1,23 @@
-<label>
-    科目</label>
+```blade
+<label for="subject_id">科目</label>
+
 <select name="subject_id" id="subject_id">
     <option value="">選択してください</option>
+
     @foreach ($subjects as $subject)
         <option value="{{ $subject->id }}"
-            {{ old('subject_id', $studyHint->book->subject_id ?? '') == $subject->id ? 'selected' : '' }}>
+            {{ old('subject_id', isset($studyHint) ? $studyHint->book?->subject_id : '') == $subject->id ? 'selected' : '' }}>
             {{ $subject->name }}
         </option>
     @endforeach
 </select>
-
 <br><br>
 
-<label>参考書</label>
+<label for="book_id">参考書</label>
+
 <select name="book_id" id="book_id">
     <option value="">選択してください</option>
+
     @foreach ($books as $book)
         <option value="{{ $book->id }}" data-subject-id="{{ $book->subject_id }}"
             {{ old('book_id', $studyHint->book_id ?? '') == $book->id ? 'selected' : '' }}>
@@ -24,219 +27,172 @@
 </select>
 
 @error('book_id')
-    <p style="color:red;">{{ $message }}</p>
+    <p style="color:red;">
+        {{ $message }}
+    </p>
 @enderror
 
 <br><br>
-<label>ページ番号</label>
-<input type="number" name="page_number" value="{{ old('page_number', $studyHint->page_number ?? '') }}">
+
+<label for="page_number">ページ番号</label>
+
+<input type="number" name="page_number" id="page_number" min="1"
+    value="{{ old('page_number', $studyHint->page_number ?? '') }}">
+
 @error('page_number')
-    <p style="color:red;">{{ $message }}</p>
+    <p style="color:red;">
+        {{ $message }}
+    </p>
 @enderror
 
-<label>大問番号1</label>
-<input type="text" name="question_no_1" maxlength="4"
+<br><br>
+
+<label for="question_no_1">大問番号1</label>
+
+<input type="text" name="question_no_1" id="question_no_1" maxlength="4"
     value="{{ old('question_no_1', $studyHint->question_no_1 ?? '') }}">
+
 @error('question_no_1')
-    <p style="color:red;">{{ $message }}</p>
+    <p style="color:red;">
+        {{ $message }}
+    </p>
 @enderror
 
-<label>大問番号2</label>
-<input type="text" name="question_no_2" maxlength="4"
+<label for="question_no_2">大問番号2</label>
+
+<input type="text" name="question_no_2" id="question_no_2" maxlength="4"
     value="{{ old('question_no_2', $studyHint->question_no_2 ?? '') }}">
+
 @error('question_no_2')
-    <p style="color:red;">{{ $message }}</p>
+    <p style="color:red;">
+        {{ $message }}
+    </p>
 @enderror
 
-<label>大問番号3</label>
-<input type="text" name="question_no_3" maxlength="4"
+<label for="question_no_3">大問番号3</label>
+
+<input type="text" name="question_no_3" id="question_no_3" maxlength="4"
     value="{{ old('question_no_3', $studyHint->question_no_3 ?? '') }}">
+
 @error('question_no_3')
-    <p style="color:red;">{{ $message }}</p>
+    <p style="color:red;">
+        {{ $message }}
+    </p>
 @enderror
 
-<label>ヒント内容</label>
-<textarea name="hint">{{ old('hint', $studyHint->hint ?? '') }}</textarea>
-@error('hint')
-    <p style="color:red;">{{ $message }}</p>
-@enderror
+@php
+    /*
+     * 編集画面では、登録済みのproblem_hintsを
+     * hint_orderをキーにして取得します。
+     */
+    $existingHints = isset($studyHint) ? $studyHint->problemHints->keyBy('hint_order') : collect();
+@endphp
 
-<br><br>
+<h3>ヒント</h3>
 
-<br><br>
+<p>
+    ヒントは最大3個まで登録できます。<br>
+    文章のみ、画像のみ、文章と画像の両方で登録できます。
+</p>
+<div class="image-color-setting">
+    <label>
+        <input type="checkbox" name="save_images_in_color" id="save-images-in-color" value="1"
+            {{ old('save_images_in_color') ? 'checked' : '' }}>
 
-<label for="image">画像添付</label>
+        画像をカラーで保存する
+    </label>
 
-@if (!empty($studyHint?->image_url))
-    <p>現在の画像が登録されています。</p>
-
-    <input type="hidden" name="current_image" value="{{ $studyHint->image_url }}">
-@endif
-
-<div id="image-paste-area" class="image-paste-area" contenteditable="true" role="textbox" aria-label="画像貼り付け欄">
-    ここをタップまたはクリックして、スクリーンショットを貼り付けてください
+    <p class="image-color-setting-note">
+        チェックなしの場合は、選択・貼り付けした画像を
+        モノクロに変換してから保存します。
+    </p>
 </div>
 
-<p id="paste-status" class="paste-status" hidden></p>
+@if ($errors->any())
+    <p class="validation-image-notice">
+        入力内容に誤りがあったため、選択・貼り付けした画像はリセットされています。
+        お手数ですが、画像をもう一度選択または貼り付けしてください。
+    </p>
+@endif
+@for ($index = 0; $index < 3; $index++)
+    @php
+        $hintNumber = $index + 1;
+        $existingHint = $existingHints->get($hintNumber);
 
-<input type="file" name="image" id="image" accept="image/*">
+        $currentContent = $existingHint?->content;
+        $currentImageUrl = $existingHint?->image_url;
+    @endphp
+    <fieldset class="problem-hint-fieldset">
+        <legend>
+            ヒント{{ $hintNumber }}
+        </legend>
 
-<p>画像は1枚まで登録できます。</p>
+        <label for="hint-content-{{ $index }}">
+            ヒント文章
+        </label>
 
-@error('image')
-    <p style="color:red;">{{ $message }}</p>
+        <textarea name="hints[{{ $index }}][content]" id="hint-content-{{ $index }}" rows="5">{{ old("hints.$index.content", $currentContent) }}</textarea>
+
+        @error("hints.$index.content")
+            <p style="color:red;">
+                {{ $message }}
+            </p>
+        @enderror
+
+        <br><br>
+
+        @if (filled($currentImageUrl))
+            <div class="current-hint-image">
+                <p>
+                    現在登録されている画像
+                </p>
+
+                <img src="{{ $currentImageUrl }}" alt="ヒント{{ $hintNumber }}の現在の画像" class="hint-thumbnail"
+                    data-full-image="{{ $currentImageUrl }}">
+            </div>
+
+            <input type="hidden" name="hints[{{ $index }}][current_image]" value="{{ $currentImageUrl }}">
+        @endif
+
+        <label for="hint-image-{{ $index }}">
+            {{ filled($currentImageUrl) ? '新しい画像に差し替える' : 'ヒント画像' }}
+        </label>
+
+        <div id="image-paste-area-{{ $index }}" class="image-paste-area" contenteditable="true" role="textbox"
+            tabindex="0" aria-label="ヒント{{ $hintNumber }}の画像貼り付け欄">
+            ここをタップまたはクリックして、
+            スクリーンショットを貼り付けてください
+        </div>
+
+        <p id="paste-status-{{ $index }}" class="paste-status" hidden></p>
+
+        <input type="file" name="hints[{{ $index }}][image]" id="hint-image-{{ $index }}"
+            accept="image/*">
+
+        @error("hints.$index.image")
+            <p style="color:red;">
+                {{ $message }}
+            </p>
+        @enderror
+
+        @if (filled($currentImageUrl))
+            <br>
+
+            <label>
+                <input type="checkbox" name="hints[{{ $index }}][remove_image]" value="1"
+                    {{ old("hints.$index.remove_image") ? 'checked' : '' }}>
+
+                現在の画像を削除する
+            </label>
+        @endif
+    </fieldset>
+
+    <br>
+@endfor
+
+@error('hints')
+    <p style="color:red;">
+        {{ $message }}
+    </p>
 @enderror
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        /*
-         * 科目に応じて参考書を絞り込む処理
-         */
-        const subjectSelect = document.getElementById('subject_id');
-        const bookSelect = document.getElementById('book_id');
-
-        if (subjectSelect && bookSelect) {
-            const allBookOptions = Array.from(bookSelect.options);
-
-            function filterBooks(resetBook = false) {
-                const selectedSubjectId = subjectSelect.value;
-                const currentBookId = bookSelect.value;
-
-                bookSelect.innerHTML = '';
-
-                allBookOptions.forEach(function(option) {
-                    if (
-                        option.value === '' ||
-                        option.dataset.subjectId === selectedSubjectId
-                    ) {
-                        bookSelect.appendChild(option);
-                    }
-                });
-
-                bookSelect.value = resetBook ? '' : currentBookId;
-            }
-
-            filterBooks(false);
-
-            subjectSelect.addEventListener('change', function() {
-                filterBooks(true);
-            });
-        }
-
-        /*
-         * 画像1枚のファイル選択・クリップボード貼り付け処理
-         */
-        const pasteArea = document.getElementById('image-paste-area');
-        const imageInput = document.getElementById('image');
-        const pasteStatus = document.getElementById('paste-status');
-
-        if (!pasteArea || !imageInput || !pasteStatus) {
-            return;
-        }
-
-        function showStatus(message, isError = false) {
-            pasteStatus.textContent = message;
-            pasteStatus.hidden = false;
-            pasteStatus.style.color = isError ? 'red' : '#267326';
-        }
-
-        function setImageFile(imageFile) {
-            if (!imageFile || !imageFile.type.startsWith('image/')) {
-                showStatus('画像ファイルを取得できませんでした。', true);
-                return;
-            }
-
-            try {
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(imageFile);
-                imageInput.files = dataTransfer.files;
-
-                if (imageInput.files.length !== 1) {
-                    throw new Error(
-                        '画像をファイル入力へ設定できませんでした。'
-                    );
-                }
-
-                pasteArea.textContent = '画像を貼り付け済みです';
-                pasteArea.classList.add('has-image');
-
-                showStatus(
-                    '画像を貼り付けました。登録ボタンを押してください。'
-                );
-            } catch (error) {
-                console.error(error);
-
-                showStatus(
-                    'この端末では貼り付け画像を送信できません。下のファイル選択を利用してください。',
-                    true
-                );
-            }
-        }
-
-        pasteArea.addEventListener('paste', function(event) {
-            event.preventDefault();
-
-            const clipboardData = event.clipboardData;
-            let imageFile = null;
-
-            if (clipboardData?.files) {
-                for (const file of clipboardData.files) {
-                    if (file.type.startsWith('image/')) {
-                        imageFile = file;
-                        break;
-                    }
-                }
-            }
-
-            if (!imageFile && clipboardData?.items) {
-                for (const item of clipboardData.items) {
-                    if (
-                        item.kind === 'file' &&
-                        item.type.startsWith('image/')
-                    ) {
-                        imageFile = item.getAsFile();
-                        break;
-                    }
-                }
-            }
-
-            if (!imageFile) {
-                showStatus(
-                    'クリップボードから画像を取得できませんでした。',
-                    true
-                );
-                return;
-            }
-
-            setImageFile(imageFile);
-        });
-
-        imageInput.addEventListener('change', function() {
-            const file = imageInput.files[0];
-
-            if (!file) {
-                pasteStatus.hidden = true;
-                pasteArea.textContent =
-                    'ここをタップまたはクリックして、スクリーンショットを貼り付けてください';
-                pasteArea.classList.remove('has-image');
-                return;
-            }
-
-            if (!file.type.startsWith('image/')) {
-                imageInput.value = '';
-
-                showStatus(
-                    '画像ファイルを選択してください。',
-                    true
-                );
-                return;
-            }
-
-            pasteArea.textContent = '画像を選択済みです';
-            pasteArea.classList.add('has-image');
-
-            showStatus(
-                '画像を選択しました。登録ボタンを押してください。'
-            );
-        });
-    });
-</script>
+```
